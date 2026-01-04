@@ -105,10 +105,16 @@ const TruckDetailsScreen = ({ route, navigation }) => {
   // =====================================
   // ACTIONS
   // =====================================
+// =====================================
+// ACTIONS
+// =====================================
+// =====================================
+// ACTIONS
+// =====================================
   const handleDelete = () => {
     Alert.alert(
-      'Supprimer le camion',
-      `Êtes-vous sûr de vouloir supprimer ${truck.brand} (${truck.plate}) ?`,
+      '⚠️ Supprimer le camion',
+      `Êtes-vous sûr de vouloir supprimer ${truck.brand} (${truck.plate}) ?\n\n⚠️ Ce camion ne doit pas avoir de missions en cours (pending ou in_progress).\n\nLes missions terminées garderont la référence du camion.`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -117,19 +123,36 @@ const TruckDetailsScreen = ({ route, navigation }) => {
           onPress: async () => {
             try {
               await deleteTruck(truck.id);
-              Alert.alert('Succès', 'Camion supprimé avec succès', [
+              
+              // ✅ Suppression réussie
+              Alert.alert('✅ Succès', 'Camion supprimé avec succès', [
                 { text: 'OK', onPress: () => navigation.goBack() }
               ]);
-            } catch (e) {
-              console.error('Delete truck error:', e);
-              Alert.alert('Erreur', 'Impossible de supprimer le camion');
+            } catch (error) {
+              console.error('Delete truck error:', error);
+              
+              // ❌ Extraire le message d'erreur du backend
+              let errorMessage = 'Impossible de supprimer le camion';
+              
+              // Vérifier si l'erreur vient du backend (response.data)
+              if (error.response && error.response.data) {
+                if (error.response.data.error) {
+                  errorMessage = error.response.data.error;
+                } else if (error.response.data.message) {
+                  errorMessage = error.response.data.message;
+                }
+              } else if (error.message) {
+                errorMessage = error.message;
+              }
+              
+              // Afficher l'erreur détaillée
+              Alert.alert('❌ Suppression impossible', errorMessage);
             }
           },
         },
       ]
     );
   };
-
   // =====================================
   // LOADING & ERROR STATES
   // =====================================

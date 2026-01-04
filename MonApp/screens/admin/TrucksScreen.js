@@ -84,10 +84,9 @@ const TruckScreen = ({ navigation }) => {
   // =====================================
   // ACTIONS
   // =====================================
-  const handleAddTruck = () => {
-    Alert.alert('Ajouter un camion', 'Fonctionnalité à implémenter');
-  };
-
+ const handleAddTruck = () => {
+  navigation.navigate('AddTruck');  // ✅ Navigation vers l'écran d'ajout
+};
   const handleTruckPress = (truck) => {
     navigation.navigate('TruckDetails', {
       truck,

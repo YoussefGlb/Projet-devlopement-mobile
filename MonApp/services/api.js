@@ -149,11 +149,34 @@ export const updateTruck = (id, data) =>
     body: JSON.stringify(data),
   });
 
-export const deleteTruck = (id) =>
-  request(`/trucks/${id}/`, {
-    method: 'DELETE',
-  });
+export const deleteTruck = async (id) => {
+  try {
+    const response = await fetch(`${API_URL}/trucks/${id}/`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
+    // ❌ Si erreur, extraire le message du backend
+    if (!response.ok) {
+      const errorData = await response.json();
+      const error = new Error(errorData.error || 'Erreur de suppression');
+      error.response = { data: errorData };
+      throw error;
+    }
+
+    // ✅ Si succès (200 ou 204)
+    if (response.status === 204) {
+      return {}; // No content
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('deleteTruck error:', error);
+    throw error;
+  }
+};
 // ===============================
 // FUEL
 // ===============================

@@ -11,6 +11,7 @@ import TrucksScreen from '../screens/admin/TrucksScreen';
 import EditDriverScreen from '../screens/admin/EditDriverScreen';
 import DriverHistoryScreen from '../screens/admin/DriverHistoryScreen';
 import CreateDriverScreen from '../screens/admin/CreateDriverScreen';
+import AddTruckScreen from '../screens/admin/AddTruckScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -55,6 +56,10 @@ const AdminStackNavigator = () => {
         component={DriverHistoryScreen} 
       />
       <Stack.Screen 
+        name="CreateDriver" 
+        component={CreateDriverScreen} 
+      />
+      <Stack.Screen 
         name="Trucks" 
         component={TrucksScreen} 
       />
@@ -63,12 +68,12 @@ const AdminStackNavigator = () => {
         component={TruckDetailScreen} 
       />
       <Stack.Screen 
-        name="Fuel" 
-        component={FuelManagementScreen} 
+        name="AddTruck" 
+        component={AddTruckScreen} 
       />
       <Stack.Screen 
-        name="CreateDriver" 
-        component={CreateDriverScreen} 
+        name="Fuel" 
+        component={FuelManagementScreen} 
       />
     </Stack.Navigator>
   );

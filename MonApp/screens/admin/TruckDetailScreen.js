@@ -35,25 +35,44 @@ const COLORS = {
 // TRUCK DETAILS SCREEN (ADMIN)
 // =====================================
 const TruckDetailsScreen = ({ route, navigation }) => {
-  const { truckId } = route.params;
+  const truckParam = route?.params?.truck;
+  const truckIdParam = route?.params?.truckId;
 
-  const [truck, setTruck] = useState(null);
+  const [truck, setTruck] = useState(truckParam || null);
+  const [loading, setLoading] = useState(!truckParam);
+  const [error, setError] = useState(null);
 
   // =====================================
   // LOAD TRUCK
   // =====================================
   useEffect(() => {
+    if (truckParam) {
+      setLoading(false);
+      return;
+    }
+
+    if (!truckIdParam) {
+      setError('ID du camion manquant');
+      setLoading(false);
+      return;
+    }
+
     const loadTruck = async () => {
       try {
-        const data = await getTruckById(truckId);
+        setLoading(true);
+        setError(null);
+        const data = await getTruckById(truckIdParam);
         setTruck(data);
       } catch (e) {
         console.error('Truck detail load error:', e);
+        setError('Impossible de charger les détails du camion');
+      } finally {
+        setLoading(false);
       }
     };
 
     loadTruck();
-  }, [truckId]);
+  }, [truckIdParam, truckParam]);
 
   // =====================================
   // HELPERS
@@ -71,30 +90,25 @@ const TruckDetailsScreen = ({ route, navigation }) => {
     return COLORS.primary;
   };
 
-  const getStatusInfo = (status) => {
-    switch (status) {
-      case 'available':
-        return { label: 'Disponible', color: COLORS.success };
-      case 'in_mission':
-        return { label: 'En mission', color: COLORS.info };
-      case 'maintenance':
-        return { label: 'Maintenance', color: COLORS.warning };
-      default:
-        return { label: 'Inconnu', color: COLORS.textMuted };
+  const getStatusInfo = () => {
+    if (!truck) return { label: 'Inconnu', color: COLORS.textMuted };
+    
+    if (truck.is_available === true) {
+      return { label: 'Disponible', color: COLORS.success };
+    } else if (truck.is_available === false) {
+      return { label: 'Non disponible', color: COLORS.warning };
     }
+    
+    return { label: 'Inconnu', color: COLORS.textMuted };
   };
 
   // =====================================
   // ACTIONS
   // =====================================
-  const handleEdit = () => {
-    Alert.alert('Modifier', 'Fonctionnalité à implémenter');
-  };
-
   const handleDelete = () => {
     Alert.alert(
       'Supprimer le camion',
-      'Êtes-vous sûr de vouloir supprimer ce camion ?',
+      `Êtes-vous sûr de vouloir supprimer ${truck.brand} (${truck.plate}) ?`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -103,8 +117,9 @@ const TruckDetailsScreen = ({ route, navigation }) => {
           onPress: async () => {
             try {
               await deleteTruck(truck.id);
-              Alert.alert('Supprimé', 'Camion supprimé avec succès');
-              navigation.goBack();
+              Alert.alert('Succès', 'Camion supprimé avec succès', [
+                { text: 'OK', onPress: () => navigation.goBack() }
+              ]);
             } catch (e) {
               console.error('Delete truck error:', e);
               Alert.alert('Erreur', 'Impossible de supprimer le camion');
@@ -115,11 +130,72 @@ const TruckDetailsScreen = ({ route, navigation }) => {
     );
   };
 
-  if (!truck) return null;
+  // =====================================
+  // LOADING & ERROR STATES
+  // =====================================
+  if (!truckIdParam && !truckParam) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Ionicons name="alert-circle" size={64} color={COLORS.primary} />
+        <Text style={{ color: COLORS.text, fontSize: 18, marginTop: 16, textAlign: 'center' }}>
+          ID du camion manquant
+        </Text>
+        <TouchableOpacity 
+          style={{ marginTop: 24, padding: 16, backgroundColor: COLORS.card, borderRadius: 12 }}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={{ color: COLORS.text, fontWeight: '600' }}>Retour</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Ionicons name="refresh" size={48} color={COLORS.primary} />
+        <Text style={{ color: COLORS.text, fontSize: 16, marginTop: 16 }}>Chargement...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Ionicons name="alert-circle" size={64} color={COLORS.primary} />
+        <Text style={{ color: COLORS.text, fontSize: 18, marginTop: 16, textAlign: 'center' }}>
+          {error}
+        </Text>
+        <TouchableOpacity 
+          style={{ marginTop: 24, padding: 16, backgroundColor: COLORS.card, borderRadius: 12 }}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={{ color: COLORS.text, fontWeight: '600' }}>Retour</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!truck) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Ionicons name="alert-circle" size={64} color={COLORS.primary} />
+        <Text style={{ color: COLORS.text, fontSize: 18, marginTop: 16, textAlign: 'center' }}>
+          Camion introuvable
+        </Text>
+        <TouchableOpacity 
+          style={{ marginTop: 24, padding: 16, backgroundColor: COLORS.card, borderRadius: 12 }}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={{ color: COLORS.text, fontWeight: '600' }}>Retour</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const fuelPercentage = getFuelPercentage();
   const fuelColor = getFuelColor(fuelPercentage);
-  const statusInfo = getStatusInfo(truck.status);
+  const statusInfo = getStatusInfo();
 
   // =====================================
   // UI COMPONENT
@@ -157,9 +233,9 @@ const TruckDetailsScreen = ({ route, navigation }) => {
 
           <Text style={styles.headerTitle}>Détails Camion</Text>
 
-          <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
-            <Ionicons name="create-outline" size={24} color={COLORS.text} />
-          </TouchableOpacity>
+          <View style={styles.infoButton}>
+            <Ionicons name="information-circle" size={24} color={COLORS.info} />
+          </View>
         </View>
 
         {/* TRUCK IMAGE */}
@@ -171,7 +247,7 @@ const TruckDetailsScreen = ({ route, navigation }) => {
         <View style={styles.mainCard}>
           <Text style={styles.truckBrand}>{truck.brand}</Text>
           <Text style={styles.truckPlate}>{truck.plate}</Text>
-          <Text style={styles.truckId}>{truck.id}</Text>
+          <Text style={styles.truckId}>ID: #{truck.id}</Text>
 
           <View
             style={[
@@ -191,15 +267,15 @@ const TruckDetailsScreen = ({ route, navigation }) => {
 
           <View style={styles.card}>
             <View style={styles.fuelHeader}>
-              <View style={styles.fuelIconContainer}>
+              <View style={[styles.fuelIconContainer, { backgroundColor: fuelColor + '20' }]}>
                 <Ionicons name="water" size={32} color={fuelColor} />
               </View>
               <View>
-                <Text style={styles.fuelPercentage}>
+                <Text style={[styles.fuelPercentage, { color: fuelColor }]}>
                   {fuelPercentage}%
                 </Text>
                 <Text style={styles.fuelLiters}>
-                  {truck.current_fuel}L / {truck.tank_capacity}L
+                  {truck.current_fuel.toFixed(1)}L / {truck.tank_capacity}L
                 </Text>
               </View>
             </View>
@@ -239,7 +315,7 @@ const TruckDetailsScreen = ({ route, navigation }) => {
             <DetailCard
               icon="cube-outline"
               label="Capacité"
-              value={`${truck.capacity / 1000}T`}
+              value={`${(truck.capacity / 1000).toFixed(1)}T`}
               color={COLORS.success}
             />
             <DetailCard
@@ -263,25 +339,30 @@ const TruckDetailsScreen = ({ route, navigation }) => {
           </View>
         </View>
 
+        {/* CONSUMPTION */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Consommation</Text>
+
+          <View style={styles.card}>
+            <View style={styles.consumptionRow}>
+              <View style={styles.consumptionLeft}>
+                <Ionicons name="speedometer" size={24} color={COLORS.info} />
+                <Text style={styles.consumptionLabel}>Consommation moyenne</Text>
+              </View>
+              <Text style={styles.consumptionValue}>
+                {truck.avg_consumption ? `${truck.avg_consumption.toFixed(1)} L/100km` : 'N/A'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* ACTIONS */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Actions</Text>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() =>
-              Alert.alert('Maintenance', 'Planifier une maintenance')
-            }
-          >
-            <Ionicons name="build-outline" size={24} color={COLORS.warning} />
-            <Text style={styles.actionButtonText}>
-              Planifier maintenance
-            </Text>
-          </TouchableOpacity>
-
           <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
             <Ionicons name="trash-outline" size={24} color={COLORS.primary} />
-            <Text style={styles.deleteButtonText}>Supprimer</Text>
+            <Text style={styles.deleteButtonText}>Supprimer le camion</Text>
           </TouchableOpacity>
         </View>
 
@@ -292,7 +373,7 @@ const TruckDetailsScreen = ({ route, navigation }) => {
 };
 
 // =====================================
-// STYLES (STRICTEMENT IDENTIQUES)
+// STYLES
 // =====================================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
@@ -316,7 +397,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
   },
-  editButton: {
+  infoButton: {
     width: 40,
     height: 40,
     borderRadius: 12,
@@ -397,7 +478,6 @@ const styles = StyleSheet.create({
   fuelPercentage: {
     fontSize: 32,
     fontWeight: '700',
-    color: COLORS.text,
   },
   fuelLiters: {
     fontSize: 16,
@@ -457,19 +537,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
   },
-  actionButton: {
+  consumptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.card,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
+    justifyContent: 'space-between',
+  },
+  consumptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
-  actionButtonText: {
+  consumptionLabel: {
     fontSize: 16,
-    fontWeight: '600',
     color: COLORS.text,
+    fontWeight: '500',
+  },
+  consumptionValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.info,
   },
   deleteButton: {
     flexDirection: 'row',

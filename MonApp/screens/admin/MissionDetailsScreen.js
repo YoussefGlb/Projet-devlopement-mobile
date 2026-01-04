@@ -12,7 +12,7 @@ import {
 // 🌐 API
 import {
   getMissionById,
-  updateMission,
+  cancelMission,
 } from '../../services/api';
 
 // =====================================
@@ -91,11 +91,8 @@ const MissionDetailScreen = ({ route, navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await updateMission(mission.id, {
-                status: 'cancelled',
-              });
-
-              Alert.alert('Annulée', 'Mission annulée avec succès');
+              await cancelMission(mission.id);
+              Alert.alert('Succès', 'Mission annulée');
               navigation.goBack();
             } catch (e) {
               console.error('Cancel mission error:', e);
@@ -106,6 +103,7 @@ const MissionDetailScreen = ({ route, navigation }) => {
       ]
     );
   };
+
 
   // =====================================
   // UI HELPERS

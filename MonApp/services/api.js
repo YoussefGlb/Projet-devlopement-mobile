@@ -274,3 +274,22 @@ export const refuelAndCreateMission = async (truckId, refuelAmount, missionData)
     throw error;
   }
 };
+export const cancelMission = async (missionId) => {
+  const response = await fetch(
+    `${API_URL}/missions/${missionId}/cancel/`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('Cancel mission API error:', error);
+    throw new Error(error);
+  }
+
+  return response.json();
+};

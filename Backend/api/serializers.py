@@ -72,7 +72,7 @@ class TruckSerializer(serializers.ModelSerializer):
 
 
 # =========================
-# MISSION - SIMPLIFIÉ ✅
+# MISSION - SIMPLIFIÉ ✅ (CORRIGÉ COMPLET)
 # =========================
 class MissionSerializer(serializers.ModelSerializer):
     # 🔹 LECTURE : Toujours retourner les objets complets
@@ -102,103 +102,159 @@ class MissionSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """
-        Validations lors de la création/modification d'une mission
-        """
-        truck = data.get('truck')
-        driver = data.get('driver')
+        Validations lors de la création ou modification d'une mission
 
-        # ✅ VALIDATION 1: Camion déjà en mission ?
+        ⚠️ RÈGLE IMPORTANTE :
+        - Si on modifie UNIQUEMENT le status (cancel / start / complete),
+          on NE BLOQUE PAS avec les validations métier.
+        """
+
+        # ==================================================
+        # CAS SPÉCIAL : UPDATE PARTIEL (status seul)
+        # ==================================================
+        if self.instance and set(data.keys()) == {'status'}:
+            return data
+
+        # ==================================================
+        # RÉCUPÉRER LES VALEURS ACTUELLES SI UPDATE
+        # ==================================================
+        truck = data.get(
+            'truck',
+            self.instance.truck if self.instance else None
+        )
+
+        driver = data.get(
+            'driver',
+            self.instance.driver if self.instance else None
+        )
+
+        pickup_time = data.get(
+            'pickup_time',
+            self.instance.pickup_time if self.instance else None
+        )
+
+        expected_dropoff_time = data.get(
+            'expected_dropoff_time',
+            self.instance.expected_dropoff_time if self.instance else None
+        )
+
+        # ==================================================
+        # ✅ VALIDATION 1 : Camion déjà en mission ?
+        # ==================================================
         if truck:
             existing_mission = Mission.objects.filter(
                 truck=truck,
                 status='in_progress'
-            ).exclude(pk=self.instance.pk if self.instance else None).first()
+            ).exclude(
+                pk=self.instance.pk if self.instance else None
+            ).first()
 
             if existing_mission:
                 raise serializers.ValidationError({
-                    'truck': f'Ce camion est déjà assigné à la mission #{existing_mission.id} en cours.'
+                    'truck': (
+                        f'Ce camion est déjà assigné '
+                        f'à la mission #{existing_mission.id} en cours.'
+                    )
                 })
 
-        # ✅ VALIDATION 2: Driver a assez d'heures contractuelles ?
-        if driver and data.get('pickup_time') and data.get('expected_dropoff_time'):
-            pickup_time = data.get('pickup_time')
-            expected_dropoff_time = data.get('expected_dropoff_time')
-            
-            # Calculer les heures estimées basées sur la durée prévue
+        # ==================================================
+        # ✅ VALIDATION 2 : Heures contractuelles du chauffeur
+        # ==================================================
+        if driver and pickup_time and expected_dropoff_time:
             duration = expected_dropoff_time - pickup_time
             estimated_hours = duration.total_seconds() / 3600
-            
+
             if estimated_hours > 0 and not driver.has_capacity_for_mission(estimated_hours):
                 remaining = driver.get_remaining_hours()
                 raise serializers.ValidationError({
-                    'driver': f'{driver.name} n\'a que {remaining:.1f}h disponibles (besoin: {estimated_hours:.1f}h)'
+                    'driver': (
+                        f'{driver.name} n\'a que {remaining:.1f}h disponibles '
+                        f'(besoin : {estimated_hours:.1f}h)'
+                    )
                 })
 
         return data
 
     def create(self, validated_data):
         """
-        Création de mission simple
+        Création de mission
         L'admin choisit pickup_time et expected_dropoff_time manuellement
         """
+
         truck = validated_data.get('truck')
         distance = validated_data.get('distance', 0)
 
-        # ✅ CALCUL AUTOMATIQUE DU COÛT CARBURANT UNIQUEMENT
+        # ==================================================
+        # CALCUL AUTOMATIQUE DU COÛT CARBURANT
+        # ==================================================
         if truck and distance > 0:
-            # Prix moyen du gazole au Maroc: 15 DH/L
-            estimated_cost = truck.calculate_fuel_cost(distance, price_per_liter=15.0)
+            estimated_cost = truck.calculate_fuel_cost(
+                distance,
+                price_per_liter=15.0
+            )
             validated_data['estimated_fuel_cost'] = round(estimated_cost, 2)
-        elif 'estimated_fuel_cost' not in validated_data:
-            validated_data['estimated_fuel_cost'] = 0
+        else:
+            validated_data.setdefault('estimated_fuel_cost', 0)
 
         mission = Mission.objects.create(**validated_data)
-        
+
+        # ==================================================
+        # LOG DEBUG
+        # ==================================================
         print(f"✅ Mission #{mission.id} créée")
-        print(f"   Départ: {mission.pickup_time}")
-        print(f"   Arrivée prévue: {mission.expected_dropoff_time}")
+        print(f"   Départ : {mission.pickup_time}")
+        print(f"   Arrivée prévue : {mission.expected_dropoff_time}")
+
         if mission.pickup_time and mission.expected_dropoff_time:
             duration = mission.expected_dropoff_time - mission.pickup_time
             hours = duration.total_seconds() / 3600
-            print(f"   Durée: {hours:.1f}h")
-        
+            print(f"   Durée prévue : {hours:.1f}h")
+
         return mission
 
     def update(self, instance, validated_data):
         """
-        Mise à jour simple
+        Mise à jour complète et sécurisée
         """
+
         truck = validated_data.get('truck', instance.truck)
         distance = validated_data.get('distance', instance.distance)
 
-        # Recalculer coût carburant si camion ou distance change
+        # ==================================================
+        # Recalcul carburant si camion ou distance changent
+        # ==================================================
         if truck and distance > 0:
             if truck != instance.truck or distance != instance.distance:
-                estimated_cost = truck.calculate_fuel_cost(distance, price_per_liter=15.0)
+                estimated_cost = truck.calculate_fuel_cost(
+                    distance,
+                    price_per_liter=15.0
+                )
                 validated_data['estimated_fuel_cost'] = round(estimated_cost, 2)
 
+        # ==================================================
+        # APPLICATION DES CHANGEMENTS
+        # ==================================================
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        
+
         instance.save()
         return instance
 
     def to_representation(self, instance):
         """
-        Force le retour des objets driver et truck complets,
-        même après les actions start/complete
+        Toujours retourner les objets driver et truck complets,
+        même après cancel / start / complete
         """
+
         representation = super().to_representation(instance)
-        
-        # S'assurer que driver et truck sont toujours des objets complets
+
         if instance.driver:
             representation['driver'] = DriverSerializer(instance.driver).data
-        
+
         if instance.truck:
             representation['truck'] = TruckSerializer(instance.truck).data
-        
-        return representation
 
+        return representation
 
 # =========================
 # FUEL

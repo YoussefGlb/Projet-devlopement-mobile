@@ -274,6 +274,26 @@ class MissionViewSet(ModelViewSet):
             self.get_serializer(mission).data,
             status=status.HTTP_200_OK
         )
+        
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        mission = self.get_object()
+
+        # ❌ Mission déjà terminée ou annulée
+        if mission.status not in ['pending', 'in_progress']:
+            return Response(
+                {"error": "Cette mission ne peut pas être annulée"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        mission.status = 'cancelled'
+        mission.actual_end_time = timezone.now()
+        mission.save()
+
+        return Response(
+            self.get_serializer(mission).data,
+            status=status.HTTP_200_OK
+        )
 
 
 # ======================================================

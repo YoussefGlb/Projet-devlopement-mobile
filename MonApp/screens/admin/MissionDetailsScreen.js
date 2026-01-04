@@ -7,6 +7,8 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Linking,
+  Platform,
 } from 'react-native';
 
 // 🌐 API
@@ -32,27 +34,116 @@ const COLORS = {
 };
 
 // =====================================
+// 🗺️ NAVIGATION FUNCTIONS (ADMIN)
+// =====================================
+const openGoogleMaps = (
+  departureLat,
+  departureLng,
+  arrivalLat,
+  arrivalLng
+) => {
+  const url =
+    `https://www.google.com/maps/dir/?api=1` +
+    `&origin=${departureLat},${departureLng}` +
+    `&destination=${arrivalLat},${arrivalLng}` +
+    `&travelmode=driving`;
+
+  Linking.canOpenURL(url).then((supported) => {
+    if (supported) {
+      Linking.openURL(url);
+    } else {
+      Alert.alert(
+        'Erreur',
+        'Impossible d’ouvrir Google Maps'
+      );
+    }
+  });
+};
+
+const openWaze = (arrivalLat, arrivalLng) => {
+  const url =
+    `https://waze.com/ul?ll=${arrivalLat},${arrivalLng}&navigate=yes`;
+
+  Linking.canOpenURL(url).then((supported) => {
+    if (supported) {
+      Linking.openURL(url);
+    } else {
+      Alert.alert(
+        'Erreur',
+        'Waze n’est pas installé sur cet appareil'
+      );
+    }
+  });
+};
+
+const openAppleMaps = (
+  departureLat,
+  departureLng,
+  arrivalLat,
+  arrivalLng
+) => {
+  const url =
+    `http://maps.apple.com/?saddr=${departureLat},${departureLng}` +
+    `&daddr=${arrivalLat},${arrivalLng}&dirflg=d`;
+
+  Linking.canOpenURL(url).then((supported) => {
+    if (supported) {
+      Linking.openURL(url);
+    } else {
+      Alert.alert(
+        'Erreur',
+        'Impossible d’ouvrir Apple Maps'
+      );
+    }
+  });
+};
+
+// =======================
+// ⬇️ PARTIE 2 JUSTE APRÈS
+// =======================
+// =====================================
+// PARTIE 2 — LOGIQUE DU COMPOSANT
+// =====================================
+
+// =====================================
 // MISSION DETAIL SCREEN (ADMIN)
 // =====================================
 const MissionDetailScreen = ({ route, navigation }) => {
   const { missionId } = route.params;
 
   const [mission, setMission] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // =====================================
   // LOAD MISSION
   // =====================================
   useEffect(() => {
+    let isMounted = true;
+
     const loadMission = async () => {
       try {
         const data = await getMissionById(missionId);
-        setMission(data);
+        if (isMounted) {
+          setMission(data);
+        }
       } catch (e) {
         console.error('Mission detail load error:', e);
+        Alert.alert(
+          'Erreur',
+          'Impossible de charger la mission'
+        );
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadMission();
+
+    return () => {
+      isMounted = false;
+    };
   }, [missionId]);
 
   // =====================================
@@ -77,10 +168,15 @@ const MissionDetailScreen = ({ route, navigation }) => {
   // ACTIONS
   // =====================================
   const handleEdit = () => {
-    Alert.alert('Modifier', 'Fonctionnalité à implémenter');
+    Alert.alert(
+      'Modifier',
+      'Fonctionnalité à implémenter'
+    );
   };
 
   const handleCancel = () => {
+    if (!mission) return;
+
     Alert.alert(
       'Annuler la mission',
       'Êtes-vous sûr de vouloir annuler cette mission ?',
@@ -92,11 +188,25 @@ const MissionDetailScreen = ({ route, navigation }) => {
           onPress: async () => {
             try {
               await cancelMission(mission.id);
-              Alert.alert('Succès', 'Mission annulée');
-              navigation.goBack();
+              Alert.alert(
+                'Succès',
+                'Mission annulée avec succès',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => navigation.goBack(),
+                  },
+                ]
+              );
             } catch (e) {
-              console.error('Cancel mission error:', e);
-              Alert.alert('Erreur', 'Impossible d’annuler la mission');
+              console.error(
+                'Cancel mission error:',
+                e
+              );
+              Alert.alert(
+                'Erreur',
+                'Impossible d’annuler la mission'
+              );
             }
           },
         },
@@ -104,6 +214,75 @@ const MissionDetailScreen = ({ route, navigation }) => {
     );
   };
 
+  // =====================================
+  // 🗺️ OPEN NAVIGATION
+  // =====================================
+  const handleOpenNavigation = () => {
+    if (!mission) return;
+
+    const {
+      departure_lat,
+      departure_lng,
+      arrival_lat,
+      arrival_lng,
+    } = mission;
+
+    if (
+      !departure_lat ||
+      !departure_lng ||
+      !arrival_lat ||
+      !arrival_lng
+    ) {
+      Alert.alert(
+        'Erreur',
+        'Coordonnées GPS manquantes pour cette mission'
+      );
+      return;
+    }
+
+    Alert.alert(
+      '🗺️ Ouvrir l’itinéraire',
+      'Choisissez votre application',
+      [
+        {
+          text: '📍 Google Maps',
+          onPress: () =>
+            openGoogleMaps(
+              departure_lat,
+              departure_lng,
+              arrival_lat,
+              arrival_lng
+            ),
+        },
+        {
+          text: '🚗 Waze',
+          onPress: () =>
+            openWaze(
+              arrival_lat,
+              arrival_lng
+            ),
+        },
+        ...(Platform.OS === 'ios'
+          ? [
+              {
+                text: '🍎 Apple Maps',
+                onPress: () =>
+                  openAppleMaps(
+                    departure_lat,
+                    departure_lng,
+                    arrival_lat,
+                    arrival_lng
+                  ),
+              },
+            ]
+          : []),
+        {
+          text: 'Annuler',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
 
   // =====================================
   // UI HELPERS
@@ -111,17 +290,64 @@ const MissionDetailScreen = ({ route, navigation }) => {
   const InfoRow = ({ icon, label, value }) => (
     <View style={styles.infoRow}>
       <View style={styles.infoLeft}>
-        <Ionicons name={icon} size={20} color={COLORS.primary} />
-        <Text style={styles.infoLabel}>{label}</Text>
+        <Ionicons
+          name={icon}
+          size={20}
+          color={COLORS.primary}
+        />
+        <Text style={styles.infoLabel}>
+          {label}
+        </Text>
       </View>
-      <Text style={styles.infoValue}>{value}</Text>
+      <Text style={styles.infoValue}>
+        {value}
+      </Text>
     </View>
   );
 
-  if (!mission) return null;
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+        ]}
+      >
+        <Text style={{ color: COLORS.text }}>
+          Chargement de la mission…
+        </Text>
+      </View>
+    );
+  }
 
-  const statusInfo = getStatusInfo(mission.status);
+  if (!mission) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+        ]}
+      >
+        <Text style={{ color: COLORS.text }}>
+          Mission introuvable
+        </Text>
+      </View>
+    );
+  }
 
+  const statusInfo = getStatusInfo(
+    mission.status
+  );
+
+  // =======================
+  // ⬇️ PARTIE 3 JUSTE APRÈS
+  // =======================
   // =====================================
   // RENDER
   // =====================================
@@ -140,13 +366,26 @@ const MissionDetailScreen = ({ route, navigation }) => {
               }
             }}
           >
-            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+            <Ionicons
+              name="arrow-back"
+              size={24}
+              color={COLORS.text}
+            />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Détails Mission</Text>
+          <Text style={styles.headerTitle}>
+            Détails Mission
+          </Text>
 
-          <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
-            <Ionicons name="create-outline" size={24} color={COLORS.text} />
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={handleEdit}
+          >
+            <Ionicons
+              name="create-outline"
+              size={24}
+              color={COLORS.text}
+            />
           </TouchableOpacity>
         </View>
 
@@ -155,19 +394,73 @@ const MissionDetailScreen = ({ route, navigation }) => {
           <View
             style={[
               styles.statusBadge,
-              { backgroundColor: statusInfo.color + '20' },
+              {
+                backgroundColor:
+                  statusInfo.color + '20',
+              },
             ]}
           >
-            <Text style={[styles.statusText, { color: statusInfo.color }]}>
+            <Text
+              style={[
+                styles.statusText,
+                { color: statusInfo.color },
+              ]}
+            >
               {statusInfo.label}
             </Text>
           </View>
-          <Text style={styles.missionId}>{mission.id}</Text>
+          <Text style={styles.missionId}>
+            Mission #{mission.id}
+          </Text>
         </View>
 
-        {/* ROUTE */}
+        {/* 🗺️ NAVIGATION */}
+        {mission.departure_lat &&
+          mission.departure_lng &&
+          mission.arrival_lat &&
+          mission.arrival_lng && (
+            <View style={styles.section}>
+              <TouchableOpacity
+                style={styles.navigationButton}
+                onPress={handleOpenNavigation}
+              >
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <Ionicons
+                    name="navigate"
+                    size={22}
+                    color={COLORS.text}
+                  />
+                  <Text
+                    style={{
+                      color: COLORS.text,
+                      fontSize: 16,
+                      fontWeight: '700',
+                    }}
+                  >
+                    Ouvrir l’itinéraire
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={22}
+                  color={COLORS.text}
+                />
+              </TouchableOpacity>
+            </View>
+          )}
+
+        {/* ITINÉRAIRE */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Itinéraire</Text>
+          <Text style={styles.sectionTitle}>
+            Itinéraire
+          </Text>
 
           <View style={styles.routeCard}>
             <View style={styles.routeItem}>
@@ -176,7 +469,9 @@ const MissionDetailScreen = ({ route, navigation }) => {
                 <View style={styles.routeLine} />
               </View>
               <View style={styles.routeContent}>
-                <Text style={styles.routeLabel}>Départ</Text>
+                <Text style={styles.routeLabel}>
+                  Départ
+                </Text>
                 <Text style={styles.routeCity}>
                   {mission.departure_city}
                 </Text>
@@ -188,7 +483,9 @@ const MissionDetailScreen = ({ route, navigation }) => {
                 <View style={styles.dotEnd} />
               </View>
               <View style={styles.routeContent}>
-                <Text style={styles.routeLabel}>Arrivée</Text>
+                <Text style={styles.routeLabel}>
+                  Arrivée
+                </Text>
                 <Text style={styles.routeCity}>
                   {mission.arrival_city}
                 </Text>
@@ -197,9 +494,11 @@ const MissionDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* INFO */}
+        {/* INFORMATIONS */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informations</Text>
+          <Text style={styles.sectionTitle}>
+            Informations
+          </Text>
 
           <View style={styles.card}>
             <InfoRow
@@ -210,17 +509,21 @@ const MissionDetailScreen = ({ route, navigation }) => {
             <InfoRow
               icon="time-outline"
               label="Heure de prise"
-              value={new Date(mission.pickup_time).toLocaleTimeString(
-                'fr-FR',
-                { hour: '2-digit', minute: '2-digit' }
-              )}
+              value={new Date(
+                mission.pickup_time
+              ).toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
             />
           </View>
         </View>
 
         {/* ASSIGNATION */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Assignation</Text>
+          <Text style={styles.sectionTitle}>
+            Assignation
+          </Text>
 
           <View style={styles.card}>
             {mission.driver && mission.truck ? (
@@ -232,9 +535,15 @@ const MissionDetailScreen = ({ route, navigation }) => {
                       size={20}
                       color={COLORS.primary}
                     />
-                    <Text style={styles.assignLabel}>Chauffeur</Text>
+                    <Text
+                      style={styles.assignLabel}
+                    >
+                      Chauffeur
+                    </Text>
                   </View>
-                  <Text style={styles.assignValue}>
+                  <Text
+                    style={styles.assignValue}
+                  >
                     {mission.driver.name}
                   </Text>
                 </View>
@@ -246,21 +555,31 @@ const MissionDetailScreen = ({ route, navigation }) => {
                       size={20}
                       color={COLORS.primary}
                     />
-                    <Text style={styles.assignLabel}>Camion</Text>
+                    <Text
+                      style={styles.assignLabel}
+                    >
+                      Camion
+                    </Text>
                   </View>
-                  <Text style={styles.assignValue}>
+                  <Text
+                    style={styles.assignValue}
+                  >
                     {mission.truck.plate}
                   </Text>
                 </View>
               </>
             ) : (
-              <View style={styles.unassignedContainer}>
+              <View
+                style={styles.unassignedContainer}
+              >
                 <Ionicons
                   name="alert-circle-outline"
                   size={48}
                   color={COLORS.warning}
                 />
-                <Text style={styles.unassignedText}>
+                <Text
+                  style={styles.unassignedText}
+                >
                   Mission non assignée
                 </Text>
               </View>
@@ -280,7 +599,9 @@ const MissionDetailScreen = ({ route, navigation }) => {
                 size={24}
                 color={COLORS.primary}
               />
-              <Text style={styles.cancelButtonText}>
+              <Text
+                style={styles.cancelButtonText}
+              >
                 Annuler la mission
               </Text>
             </TouchableOpacity>
@@ -294,10 +615,14 @@ const MissionDetailScreen = ({ route, navigation }) => {
 };
 
 // =====================================
-// STYLES (STRICTEMENT IDENTIQUES)
+// STYLES
 // =====================================
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -305,6 +630,7 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 32,
   },
+
   backButton: {
     width: 40,
     height: 40,
@@ -313,11 +639,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
+
   editButton: {
     width: 40,
     height: 40,
@@ -326,70 +648,116 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+
   statusContainer: {
     alignItems: 'center',
     marginBottom: 24,
   },
+
   statusBadge: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 999,
     marginBottom: 8,
   },
-  statusText: { fontSize: 14, fontWeight: '700' },
+
+  statusText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
   missionId: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
     color: COLORS.text,
   },
-  section: { paddingHorizontal: 24, marginBottom: 24 },
+
+  section: {
+    paddingHorizontal: 24,
+    marginBottom: 24,
+  },
+
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: COLORS.text,
     marginBottom: 16,
   },
+
+  navigationButton: {
+    backgroundColor: COLORS.primary,
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
   routeCard: {
     backgroundColor: COLORS.card,
     borderRadius: 12,
     padding: 20,
   },
-  routeItem: { flexDirection: 'row', marginBottom: 16 },
-  routeIndicator: { alignItems: 'center', marginRight: 16 },
+
+  routeItem: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+
+  routeIndicator: {
+    alignItems: 'center',
+    marginRight: 16,
+  },
+
   dotStart: {
     width: 16,
     height: 16,
     borderRadius: 8,
     backgroundColor: COLORS.success,
   },
+
   routeLine: {
     width: 2,
     flex: 1,
     backgroundColor: COLORS.border,
     marginVertical: 8,
   },
+
   dotEnd: {
     width: 16,
     height: 16,
     borderRadius: 8,
     backgroundColor: COLORS.primary,
   },
-  routeContent: { flex: 1 },
+
+  routeContent: {
+    flex: 1,
+  },
+
   routeLabel: {
     fontSize: 12,
     color: COLORS.textMuted,
     marginBottom: 4,
   },
+
   routeCity: {
     fontSize: 20,
     fontWeight: '700',
     color: COLORS.text,
   },
+
   card: {
     backgroundColor: COLORS.card,
     borderRadius: 12,
     padding: 20,
   },
+
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -398,13 +766,24 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  infoLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  infoLabel: { fontSize: 14, color: COLORS.textSecondary },
+
+  infoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  infoLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+
   infoValue: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
   },
+
   assignRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -413,20 +792,36 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  assignLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  assignLabel: { fontSize: 14, color: COLORS.textSecondary },
+
+  assignLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  assignLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+
   assignValue: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
   },
-  unassignedContainer: { alignItems: 'center', paddingVertical: 24 },
+
+  unassignedContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+
   unassignedText: {
     fontSize: 16,
     color: COLORS.warning,
     fontWeight: '600',
     marginTop: 12,
   },
+
   cancelButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -438,6 +833,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
     gap: 12,
   },
+
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '700',

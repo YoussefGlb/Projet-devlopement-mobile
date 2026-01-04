@@ -114,7 +114,7 @@ class DriverViewSet(ModelViewSet):
                 driver.is_active = False
                 driver.save()
 
-                # ❌ Supprimer l’utilisateur Django lié
+                # ❌ Supprimer l'utilisateur Django lié
                 if driver.user:
                     driver.user.delete()
 
@@ -215,7 +215,16 @@ class MissionViewSet(ModelViewSet):
 
             truck = Truck.objects.get(id=truck_id)
 
+            # ✅ CRÉER L'ENTRÉE FUEL SI RAVITAILLEMENT
             if refuel_amount > 0:
+                FuelEntry.objects.create(
+                    truck=truck,
+                    quantity=refuel_amount,
+                    cost=refuel_amount * 15.0,  # Prix par litre
+                    location='Station-service (auto)',
+                    notes='Ravitaillement automatique lors de création de mission'
+                )
+                
                 truck.current_fuel += refuel_amount
                 truck.save()
 
@@ -239,41 +248,94 @@ class MissionViewSet(ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
-        mission = self.get_object()
+        try:
+            mission = self.get_object()
+            
+            print(f"🔍 Mission {mission.id} status: {mission.status}")
+            print(f"🔍 Mission driver: {mission.driver}")
+            print(f"🔍 Mission truck: {mission.truck}")
 
-        if mission.status != 'pending':
+            if mission.status != 'pending':
+                return Response(
+                    {"error": f"Cette mission ne peut pas être démarrée. Status actuel: {mission.status}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            mission.status = 'in_progress'
+            mission.actual_start_time = timezone.now()
+            mission.save()
+
+            print(f"✅ Mission {mission.id} démarrée avec succès")
+
+            serializer = self.get_serializer(mission)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"❌ Erreur lors du démarrage: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response(
-                {"error": "Mission non démarrable"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": f"Erreur serveur: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-        mission.status = 'in_progress'
-        mission.actual_start_time = timezone.now()
-        mission.save()
-
-        return Response(
-            self.get_serializer(mission).data,
-            status=status.HTTP_200_OK
-        )
 
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
-        mission = self.get_object()
+        try:
+            mission = self.get_object()
 
-        if mission.status != 'in_progress':
+            print(f"🔍 Completing mission {mission.id}, status: {mission.status}")
+
+            # ✅ Validation: Vérifier que la mission est en cours
+            if mission.status != 'in_progress':
+                return Response(
+                    {"error": f"Cette mission n'est pas en cours. Status: {mission.status}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ✅ Terminer la mission
+            mission.status = 'completed'
+            mission.actual_end_time = timezone.now()
+
+            # ✅ Calculer les heures basées sur la durée PRÉVUE (pas réelle)
+            if mission.pickup_time and mission.expected_dropoff_time:
+                duration = mission.expected_dropoff_time - mission.pickup_time
+                mission.hours_worked = duration.total_seconds() / 3600
+
+            # ✅ DÉDUIRE LE CARBURANT DU CAMION
+            if mission.truck and mission.distance > 0:
+                # Calculer les litres consommés
+                liters_consumed = (mission.distance * mission.truck.avg_consumption) / 100
+                
+                # Déduire du réservoir (ne peut pas descendre en dessous de 0)
+                old_fuel = mission.truck.current_fuel
+                mission.truck.current_fuel = max(0, mission.truck.current_fuel - liters_consumed)
+                mission.truck.save()
+                
+                # Enregistrer le coût réel du carburant consommé
+                mission.actual_fuel_cost = liters_consumed * 15.0  # 15 DH par litre
+                
+                print(f"⛽ Carburant consommé: {liters_consumed:.2f}L")
+                print(f"   Avant: {old_fuel:.2f}L → Après: {mission.truck.current_fuel:.2f}L")
+                print(f"   Coût réel: {mission.actual_fuel_cost:.2f} DH")
+
+            mission.save()
+
+            print(f"✅ Mission {mission.id} terminée avec succès")
+            print(f"   Heures comptabilisées: {mission.hours_worked:.1f}h (durée prévue)")
+
+            # ✅ Retourner la mission complète
+            serializer = self.get_serializer(mission)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"❌ Erreur lors de la complétion: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response(
-                {"error": "Mission non en cours"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": f"Erreur serveur: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-        mission.status = 'completed'
-        mission.actual_end_time = timezone.now()
-        mission.save()
-
-        return Response(
-            self.get_serializer(mission).data,
-            status=status.HTTP_200_OK
-        )
         
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
@@ -302,12 +364,6 @@ class MissionViewSet(ModelViewSet):
 class FuelEntryViewSet(ModelViewSet):
     queryset = FuelEntry.objects.all()
     serializer_class = FuelEntrySerializer
-
-    def perform_create(self, serializer):
-        fuel_entry = serializer.save()
-        truck = fuel_entry.truck
-        truck.current_fuel += fuel_entry.quantity
-        truck.save()
 
 
 # ======================================================

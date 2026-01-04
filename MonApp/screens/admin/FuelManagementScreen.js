@@ -33,15 +33,16 @@ const COLORS = {
 // =====================================
 // SCREEN
 // =====================================
+
+
 const FuelManagementScreen = ({ navigation }) => {
   const [fuelEntries, setFuelEntries] = useState([]);
   const [trucks, setTrucks] = useState([]);
   const [truckMap, setTruckMap] = useState({});
   const [filter, setFilter] = useState('all'); // 'all', 'week', 'month'
-
+  const [pricePerLiter] = useState(15);
   const [selectedTruck, setSelectedTruck] = useState(null);
   const [liters, setLiters] = useState('');
-  const [pricePerLiter, setPricePerLiter] = useState('15');
 
   // =====================================
   // LOAD DATA - AUTO REFRESH ✅
@@ -87,17 +88,33 @@ const FuelManagementScreen = ({ navigation }) => {
     if (filter === 'week') {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
-      filtered = fuelEntries.filter(e => new Date(e.created_at) >= weekAgo);
+      filtered = fuelEntries.filter(
+        (e) => new Date(e.created_at) >= weekAgo
+      );
     } else if (filter === 'month') {
       const monthAgo = new Date();
       monthAgo.setMonth(monthAgo.getMonth() - 1);
-      filtered = fuelEntries.filter(e => new Date(e.created_at) >= monthAgo);
+      filtered = fuelEntries.filter(
+        (e) => new Date(e.created_at) >= monthAgo
+      );
     }
 
-    const totalLiters = filtered.reduce((sum, e) => sum + (e.quantity || 0), 0);
-    const totalCost = filtered.reduce((sum, e) => sum + (Number(e.cost) || 0), 0);
+    const totalLiters = filtered.reduce(
+      (sum, e) => sum + (e.quantity || 0),
+      0
+    );
 
-    return { totalLiters, totalCost, count: filtered.length, filtered };
+    const totalCost = filtered.reduce(
+      (sum, e) => sum + (Number(e.cost) || 0),
+      0
+    );
+
+    return {
+      totalLiters,
+      totalCost,
+      count: filtered.length,
+      filtered,
+    };
   };
 
   const { totalLiters, totalCost, count, filtered } = calculateTotals();
@@ -120,13 +137,13 @@ const FuelManagementScreen = ({ navigation }) => {
           text: `${truck.brand} - ${truck.plate}`,
           onPress: () => setSelectedTruck(truck),
         })),
-        { text: 'Annuler', style: 'cancel' }
+        { text: 'Annuler', style: 'cancel' },
       ]
     );
   };
 
   // =====================================
-  // SUBMIT
+  // ADD FUEL (MANUAL)
   // =====================================
   const handleSubmitFuel = async () => {
     if (!selectedTruck) {
@@ -139,34 +156,56 @@ const FuelManagementScreen = ({ navigation }) => {
       return;
     }
 
-    if (!pricePerLiter || isNaN(pricePerLiter) || Number(pricePerLiter) <= 0) {
-      Alert.alert('Erreur', 'Prix par litre invalide');
-      return;
-    }
-
-    const payload = {
+    try {
+      await createFuelEntry({
       truck: selectedTruck.id,
       quantity: Number(liters),
-      price_per_liter: Number(pricePerLiter),
+      price_per_liter: pricePerLiter,
       location: 'Station-service',
-    };
+    });
+      Alert.alert('Succès', 'Carburant ajouté');
 
-    try {
-      await createFuelEntry(payload);
-
-      Alert.alert('Succès', 'Carburant enregistré');
       setLiters('');
-      setPricePerLiter('15');
       setSelectedTruck(null);
 
-      // 🔥 refresh réel
       await loadData();
     } catch (e) {
       console.error('Fuel create error:', e);
-      Alert.alert('Erreur', 'Échec de l\'enregistrement');
+      Alert.alert('Erreur', 'Échec de l’enregistrement');
     }
   };
 
+  // =====================================
+  // FULL TANK
+  // =====================================
+  const handleFullTank = async (truck) => {
+    const litersToAdd = truck.tank_capacity - truck.current_fuel;
+
+    if (litersToAdd <= 0) {
+      Alert.alert('Info', 'Le réservoir est déjà plein');
+      return;
+    }
+
+    try {
+     await createFuelEntry({
+      truck: truck.id,
+      quantity: litersToAdd,
+      price_per_liter: pricePerLiter,
+      location: 'Station-service',
+    });
+
+
+      Alert.alert(
+        'Succès',
+        `Plein effectué : +${litersToAdd.toFixed(1)} L`
+      );
+
+      await loadData();
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Erreur', 'Impossible de faire le plein');
+    }
+  };
   // =====================================
   // RENDER
   // =====================================
@@ -185,47 +224,79 @@ const FuelManagementScreen = ({ navigation }) => {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* STATS CARD - NEW ✅ */}
+        {/* STATS */}
         <View style={styles.section}>
           <View style={styles.statsCard}>
             <View style={styles.statsHeader}>
               <Ionicons name="water" size={32} color={COLORS.primary} />
               <View style={styles.statsContent}>
-                <Text style={styles.statValue}>{totalCost.toFixed(0)} DH</Text>
+                <Text style={styles.statValue}>
+                  {totalCost.toFixed(0)} DH
+                </Text>
                 <Text style={styles.statLabel}>Total dépensé</Text>
               </View>
             </View>
+
             <View style={styles.statsMeta}>
               <View style={styles.statsMetaItem}>
-                <Ionicons name="water-outline" size={16} color={COLORS.info} />
-                <Text style={styles.statsMetaText}>{totalLiters.toFixed(0)} L</Text>
+                <Ionicons
+                  name="water-outline"
+                  size={16}
+                  color={COLORS.info}
+                />
+                <Text style={styles.statsMetaText}>
+                  {totalLiters.toFixed(0)} L
+                </Text>
               </View>
+
               <View style={styles.statsMetaItem}>
-                <Ionicons name="receipt-outline" size={16} color={COLORS.success} />
-                <Text style={styles.statsMetaText}>{count} pleins</Text>
+                <Ionicons
+                  name="receipt-outline"
+                  size={16}
+                  color={COLORS.success}
+                />
+                <Text style={styles.statsMetaText}>
+                  {count} pleins
+                </Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* FILTERS - NEW ✅ */}
+        {/* FILTERS */}
         <View style={styles.section}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filters}
+          >
             {['all', 'week', 'month'].map((f) => (
               <TouchableOpacity
                 key={f}
-                style={[styles.filterChip, filter === f && styles.filterChipActive]}
+                style={[
+                  styles.filterChip,
+                  filter === f && styles.filterChipActive,
+                ]}
                 onPress={() => setFilter(f)}
               >
-                <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
-                  {f === 'all' ? 'Tout' : f === 'week' ? '7 jours' : 'Ce mois'}
+                <Text
+                  style={[
+                    styles.filterText,
+                    filter === f && styles.filterTextActive,
+                  ]}
+                >
+                  {f === 'all'
+                    ? 'Tout'
+                    : f === 'week'
+                    ? '7 jours'
+                    : 'Ce mois'}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
 
-        {/* FORM */}
+        {/* ADD FUEL */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Ajouter carburant</Text>
 
@@ -238,7 +309,11 @@ const FuelManagementScreen = ({ navigation }) => {
                 ? `${selectedTruck.brand} - ${selectedTruck.plate}`
                 : 'Sélectionner un camion'}
             </Text>
-            <Ionicons name="chevron-down" size={20} color={COLORS.textMuted} />
+            <Ionicons
+              name="chevron-down"
+              size={20}
+              color={COLORS.textMuted}
+            />
           </TouchableOpacity>
 
           <TextInput
@@ -250,30 +325,50 @@ const FuelManagementScreen = ({ navigation }) => {
             placeholderTextColor={COLORS.textMuted}
           />
 
-          <TextInput
-            style={styles.input}
-            value={pricePerLiter}
-            onChangeText={setPricePerLiter}
-            keyboardType="numeric"
-            placeholder="Prix par litre (DH)"
-            placeholderTextColor={COLORS.textMuted}
-          />
-
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={handleSubmitFuel}
           >
-            <Ionicons name="checkmark-circle" size={20} color={COLORS.text} />
+            <Ionicons
+              name="checkmark-circle"
+              size={20}
+              color={COLORS.text}
+            />
             <Text style={styles.primaryButtonText}>Enregistrer</Text>
           </TouchableOpacity>
+
+          {selectedTruck && (
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                { backgroundColor: COLORS.info, marginTop: 12 },
+              ]}
+              onPress={() => handleFullTank(selectedTruck)}
+            >
+              <Ionicons
+                name="battery-charging"
+                size={20}
+                color={COLORS.text}
+              />
+              <Text style={styles.primaryButtonText}>
+                Faire le plein
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* HISTORY - FILTERED ✅ */}
+        {/* HISTORY */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Historique ({count})</Text>
 
           {filtered.length === 0 && (
-            <Text style={{ color: COLORS.textMuted, textAlign: 'center', paddingVertical: 24 }}>
+            <Text
+              style={{
+                color: COLORS.textMuted,
+                textAlign: 'center',
+                paddingVertical: 24,
+              }}
+            >
               Aucun enregistrement pour cette période
             </Text>
           )}
@@ -281,31 +376,48 @@ const FuelManagementScreen = ({ navigation }) => {
           {filtered.map((entry) => (
             <View key={entry.id} style={styles.card}>
               <View style={styles.cardHeader}>
-                <Ionicons name="water" size={20} color={COLORS.primary} />
+                <Ionicons
+                  name="water"
+                  size={20}
+                  color={COLORS.primary}
+                />
                 <Text style={styles.cardTitle}>
                   {getTruckLabel(entry.truck)}
                 </Text>
               </View>
+
               <View style={styles.cardContent}>
                 <View style={styles.cardRow}>
                   <Text style={styles.cardLabel}>Quantité</Text>
-                  <Text style={styles.cardValue}>{entry.quantity} L</Text>
+                  <Text style={styles.cardValue}>
+                    {entry.quantity} L
+                  </Text>
                 </View>
+
                 <View style={styles.cardRow}>
                   <Text style={styles.cardLabel}>Coût</Text>
-                  <Text style={[styles.cardValue, { color: COLORS.primary }]}>
+                  <Text
+                    style={[
+                      styles.cardValue,
+                      { color: COLORS.primary },
+                    ]}
+                  >
                     {Number(entry.cost).toFixed(2)} DH
                   </Text>
                 </View>
               </View>
+
               <Text style={styles.date}>
-                {new Date(entry.created_at).toLocaleDateString('fr-FR', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
+                {new Date(entry.created_at).toLocaleDateString(
+                  'fr-FR',
+                  {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }
+                )}
               </Text>
             </View>
           ))}
@@ -337,7 +449,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: { fontSize: 22, fontWeight: '700', color: COLORS.text },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
   section: { paddingHorizontal: 24, marginBottom: 24 },
   sectionTitle: {
     fontSize: 18,
@@ -345,8 +461,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: 16,
   },
-
-  // STATS - NEW ✅
   statsCard: {
     backgroundColor: COLORS.card,
     padding: 20,
@@ -359,9 +473,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  statsContent: {
-    marginLeft: 16,
-  },
+  statsContent: { marginLeft: 16 },
   statValue: {
     fontSize: 32,
     fontWeight: '700',
@@ -389,11 +501,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontWeight: '500',
   },
-
-  // FILTERS - NEW ✅
-  filters: {
-    flexDirection: 'row',
-  },
+  filters: { flexDirection: 'row' },
   filterChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -415,7 +523,6 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '600',
   },
-
   selectButton: {
     backgroundColor: COLORS.card,
     padding: 16,
@@ -447,9 +554,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  primaryButtonText: { color: COLORS.text, fontWeight: '700', fontSize: 16 },
-
-  // CARDS - IMPROVED ✅
+  primaryButtonText: {
+    color: COLORS.text,
+    fontWeight: '700',
+    fontSize: 16,
+  },
   card: {
     backgroundColor: COLORS.card,
     padding: 16,
@@ -469,19 +578,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
-  cardContent: {
-    gap: 8,
-    marginBottom: 8,
-  },
+  cardContent: { gap: 8, marginBottom: 8 },
   cardRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  cardLabel: {
-    color: COLORS.textMuted,
-    fontSize: 14,
-  },
+  cardLabel: { color: COLORS.textMuted, fontSize: 14 },
   cardValue: {
     color: COLORS.text,
     fontWeight: '600',

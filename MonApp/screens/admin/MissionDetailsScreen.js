@@ -167,12 +167,7 @@ const MissionDetailScreen = ({ route, navigation }) => {
   // =====================================
   // ACTIONS
   // =====================================
-  const handleEdit = () => {
-    Alert.alert(
-      'Modifier',
-      'Fonctionnalité à implémenter'
-    );
-  };
+
 
   const handleCancel = () => {
     if (!mission) return;
@@ -377,16 +372,22 @@ const MissionDetailScreen = ({ route, navigation }) => {
             Détails Mission
           </Text>
 
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={handleEdit}
-          >
-            <Ionicons
-              name="create-outline"
-              size={24}
-              color={COLORS.text}
-            />
-          </TouchableOpacity>
+         <TouchableOpacity
+  style={styles.editButton}
+  onPress={() =>
+    Alert.alert(
+      'Informations mission',
+      'Cet écran affiche les détails complets de la mission.'
+    )
+  }
+>
+  <Ionicons
+    name="information-circle-outline"
+    size={24}
+    color={COLORS.text}
+  />
+</TouchableOpacity>
+
         </View>
 
         {/* STATUS */}

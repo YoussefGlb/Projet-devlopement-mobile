@@ -209,16 +209,7 @@ const DashboardScreen = ({ navigation }) => {
           <Text style={styles.userName}>{driver.name}</Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.notificationButton}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Ionicons
-            name="notifications-outline"
-            size={28}
-            color={COLORS.text}
-          />
-        </TouchableOpacity>
+        
       </View>
 
       {/* ACTIVE MISSION */}
@@ -267,7 +258,7 @@ const DashboardScreen = ({ navigation }) => {
 
       {/* WEEK STATS */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Cette semaine</Text>
+        <Text style={styles.sectionTitle}>Stats</Text>
 
         <View style={styles.statsContainer}>
           <StatCard

@@ -51,7 +51,7 @@ const AddTruckScreen = ({ navigation }) => {
   // =====================================
   // MOTORIZATION OPTIONS
   // =====================================
-  const motorizations = ['Diesel', 'Essence', 'Électrique', 'Hybride'];
+  const motorizations = ['Diesel', 'Électrique', 'Hybride'];
 
   const handleMotorizationSelect = () => {
     Alert.alert(

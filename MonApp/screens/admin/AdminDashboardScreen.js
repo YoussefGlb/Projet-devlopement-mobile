@@ -261,18 +261,6 @@ const AdminDashboardScreen = ({ navigation }) => {
         </View>
 
         <View style={{ flexDirection: 'row', gap: 16 }}>
-          <TouchableOpacity style={styles.notificationButton}>
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationCount}>
-                {stats.pendingMissions}
-              </Text>
-            </View>
-            <Ionicons
-              name="notifications-outline"
-              size={28}
-              color={COLORS.text}
-            />
-          </TouchableOpacity>
 
           <TouchableOpacity onPress={handleLogout}>
             <Ionicons
